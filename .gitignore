@@ -1,0 +1,24 @@
+## .NET
+bin/
+obj/
+out/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+## Rider / VS / VS Code
+.vs/
+.vscode/
+.idea/
+*.swp
+
+## OS
+.DS_Store
+
+## Test results
+[Tt]est[Rr]esult*/
+*.trx
+
+## User secrets (just in case)
+**/secrets.json

@@ -10,9 +10,28 @@ review back as a comment on the pull request.
 GitHub PR (opened / synchronize)
    -> POST /webhook/github   (HMAC-SHA256 signature verified)
    -> Fetch PR file diffs via GitHub API (Octokit.NET)
-   -> Send diff to an AI provider for review
-   -> Post the AI's feedback as a PR comment
+   -> Send diff to an AI provider, asking for a JSON review that matches a schema
+   -> Validate the findings (file is in the diff, known severity, non-empty message)
+   -> Post the validated findings as a markdown PR comment
 ```
+
+## Structured reviews
+
+The model is prompted with a system prompt plus two few-shot examples (one diff
+with real issues, one clean diff with no findings) and must answer with JSON:
+
+```json
+{"summary": "...", "findings": [{"file": "src/A.cs", "line": 12, "severity": "critical", "message": "..."}]}
+```
+
+Gemini gets the schema through `generationConfig.responseSchema` and the
+system prompt through `systemInstruction`. Azure OpenAI gets it through
+`response_format` with a strict `json_schema`. In both cases
+`ReviewResultParser` checks the output again before anything is posted: it
+normalises severities (`critical`, `major`, `minor`, `nit`), drops findings for
+files that are not in the diff, and caps the number of findings. If the output
+can't be used at all, a short fallback message is posted and the raw output is
+logged.
 
 ## AI provider
 
@@ -22,7 +41,8 @@ implementations:
 - **Gemini** (default) — uses Google's free-tier `gemini-2.0-flash` model, so
   the bot can be run and demoed without any cloud subscription.
 - **Azure OpenAI** — a fully implemented, test-covered alternative using
-  Azure OpenAI Chat Completions. This is the intended production swap (e.g.
+  Azure OpenAI Chat Completions with structured outputs (needs a deployment
+  that supports `json_schema`, e.g. gpt-4o 2024-08-06 or later). This is the intended production swap (e.g.
   for an organization already on Azure). Switch to it by setting
   `Bot:AiProvider` to `"AzureOpenAi"` and configuring the `AzureOpenAi*`
   settings below.
@@ -98,6 +118,9 @@ src/PRism.Api/
     GitHubService.cs          # diff fetching, comment posting (Octokit)
     GeminiReviewService.cs    # default AI provider
     AzureOpenAiReviewService.cs  # production-ready Azure OpenAI alternative
+    ReviewPrompts.cs          # system prompt, few-shot examples, response schemas
+    ReviewResultParser.cs     # validates and normalises the model's JSON
+    ReviewFormatter.cs        # renders findings as the PR comment
   Models/
   Configuration/BotOptions.cs
 tests/PRism.Tests/

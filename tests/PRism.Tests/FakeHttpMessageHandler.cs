@@ -10,6 +10,7 @@ public class FakeHttpMessageHandler : HttpMessageHandler
 
     public string? LastRequestContent { get; private set; }
     public Uri? LastRequestUri { get; private set; }
+    public System.Net.Http.Headers.HttpRequestHeaders? LastRequestHeaders { get; private set; }
 
     public FakeHttpMessageHandler(string responseContent, HttpStatusCode statusCode = HttpStatusCode.OK)
     {
@@ -20,6 +21,7 @@ public class FakeHttpMessageHandler : HttpMessageHandler
     protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
     {
         LastRequestUri = request.RequestUri;
+        LastRequestHeaders = request.Headers;
         LastRequestContent = request.Content is null ? null : await request.Content.ReadAsStringAsync(cancellationToken);
 
         return new HttpResponseMessage(_statusCode)

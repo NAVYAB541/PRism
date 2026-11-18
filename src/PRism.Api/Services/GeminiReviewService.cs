@@ -1,4 +1,6 @@
 using System.Net.Http.Json;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using PRism.Api.Configuration;
 using PRism.Api.Models;
@@ -9,11 +11,13 @@ public class GeminiReviewService : IAiReviewService
 {
     private readonly HttpClient _httpClient;
     private readonly BotOptions _options;
+    private readonly ILogger _logger;
 
-    public GeminiReviewService(HttpClient httpClient, IOptions<BotOptions> options)
+    public GeminiReviewService(HttpClient httpClient, IOptions<BotOptions> options, ILogger<GeminiReviewService>? logger = null)
     {
         _httpClient = httpClient;
         _options = options.Value;
+        _logger = logger ?? NullLogger<GeminiReviewService>.Instance;
     }
 
     public async Task<string> ReviewAsync(string diff)
@@ -23,17 +27,22 @@ public class GeminiReviewService : IAiReviewService
             return ReviewPrompts.NothingToReviewMessage;
         }
 
-        var prompt = $"{ReviewPrompts.SystemPrompt}\n\n{ReviewPrompts.BuildUserPrompt(diff)}";
-        var request = GeminiRequest.ForPrompt(prompt);
+        var request = GeminiRequest.ForReview(diff);
+        var url = $"https://generativelanguage.googleapis.com/v1beta/models/{_options.GeminiModel}:generateContent";
 
-        var url = $"https://generativelanguage.googleapis.com/v1beta/models/{_options.GeminiModel}:generateContent?key={_options.GeminiApiKey}";
+        using var requestMessage = new HttpRequestMessage(HttpMethod.Post, url)
+        {
+            Content = JsonContent.Create(request)
+        };
+        // Header rather than ?key= so the API key never appears in URLs or request logs.
+        requestMessage.Headers.Add("x-goog-api-key", _options.GeminiApiKey);
 
-        var response = await _httpClient.PostAsJsonAsync(url, request);
+        var response = await _httpClient.SendAsync(requestMessage);
         response.EnsureSuccessStatusCode();
 
         var result = await response.Content.ReadFromJsonAsync<GeminiResponse>();
+        var text = result?.Candidates?.FirstOrDefault()?.Content?.Parts?.FirstOrDefault()?.Text;
 
-        return result?.Candidates?.FirstOrDefault()?.Content?.Parts?.FirstOrDefault()?.Text
-            ?? "PRism: The AI provider returned an empty response.";
+        return ReviewCommentBuilder.Build(text, diff, _logger);
     }
 }

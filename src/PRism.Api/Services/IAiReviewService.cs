@@ -2,6 +2,6 @@ namespace PRism.Api.Services;
 
 public interface IAiReviewService
 {
-    /// <summary>Generates a markdown code review for the given unified diff.</summary>
+    /// <summary>Generates a structured review for the diff, validates it, and returns the markdown comment to post.</summary>
     Task<string> ReviewAsync(string diff);
 }
